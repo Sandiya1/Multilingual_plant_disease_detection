@@ -1,0 +1,1358 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PlantCare AI - Plant Disease Detection</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  min-height: 100vh;
+  position: relative;
+  overflow-x: auto;
+}
+
+/* Background with tropical leaves */
+.background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url('{% static "bg.jpg" %}');
+  background-size: cover;
+  background-position: center;
+  z-index: -2;
+}
+
+/* Dark overlay for better readability */
+.background::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(6, 78, 59, 0.8) 0%, rgba(22, 101, 52, 0.7) 50%, rgba(34, 120, 74, 0.6) 100%);
+  z-index: -1;
+}
+
+/* Page container */
+.page {
+  min-height: 100vh;
+  display: none;
+  position: relative;
+  z-index: 1;
+}
+
+.page.active {
+  display: block;
+  animation: fadeIn 0.6s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Navigation */
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(15px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 15px 0;
+  z-index: 1000;
+}
+
+.nav-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: white;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.nav-links {
+  display: flex;
+  gap: 30px;
+  list-style: none;
+}
+
+.nav-links a {
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  padding: 8px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+}
+
+.nav-links a:hover, .nav-links a.active {
+  color: white;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Home Page Styles */
+.home-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 100px 20px 20px;
+}
+
+.hero-container {
+  max-width: 1200px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 60px;
+}
+
+.hero-content {
+  flex: 1;
+  max-width: 600px;
+}
+
+.hero-content h1 {
+  font-size: 3.5rem;
+  font-weight: 800;
+  color: white;
+  line-height: 1.1;
+  margin-bottom: 20px;
+  text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.hero-content .subtitle {
+  font-size: 1.3rem;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.5;
+  margin-bottom: 40px;
+  font-weight: 300;
+}
+
+.cta-button {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  padding: 18px 40px;
+  border-radius: 30px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+  text-decoration: none;
+  display: inline-block;
+}
+
+.cta-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 35px rgba(16, 185, 129, 0.5);
+  background: linear-gradient(135deg, #059669, #047857);
+}
+
+.hero-visual {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.plant-icon {
+  width: 300px;
+  height: 300px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 120px;
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  animation: float 4s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-15px) rotate(2deg); }
+}
+
+/* Detection Page Styles */
+.detection-page {
+  padding: 100px 20px 40px;
+  min-height: 100vh;
+}
+
+.detection-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  gap: 40px;
+  align-items: flex-start;
+}
+
+.detection-sidebar {
+  flex: 0 0 300px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  padding: 30px;
+  position: sticky;
+  top: 120px;
+}
+
+.detection-sidebar h3 {
+  color: white;
+  font-size: 1.3rem;
+  margin-bottom: 20px;
+  font-weight: 600;
+}
+
+.detection-sidebar p {
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.6;
+  font-size: 0.95rem;
+}
+
+.detection-main {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  padding: 40px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+}
+
+.detection-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.detection-header h2 {
+  font-size: 2.2rem;
+  color: #064e3b;
+  margin-bottom: 15px;
+  font-weight: 700;
+}
+
+.detection-header p {
+  color: #6b7280;
+  font-size: 1.1rem;
+}
+
+.upload-section, .camera-section {
+  margin-bottom: 30px;
+  padding: 30px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05), rgba(5, 150, 105, 0.08));
+  border-radius: 15px;
+  border: 2px dashed rgba(16, 185, 129, 0.3);
+  transition: all 0.3s ease;
+}
+
+.upload-section:hover, .camera-section:hover {
+  border-color: rgba(16, 185, 129, 0.6);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(5, 150, 105, 0.12));
+  transform: translateY(-2px);
+}
+
+.section-title {
+  font-size: 1.3rem;
+  color: #064e3b;
+  margin-bottom: 20px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.section-title .icon {
+  font-size: 1.5rem;
+}
+
+input[type="file"] {
+  display: none;
+}
+
+.file-upload-btn, .btn {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  padding: 15px 30px;
+  border-radius: 25px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+  display: inline-block;
+  text-decoration: none;
+  min-width: 160px;
+}
+
+.file-upload-btn:hover, .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+  background: linear-gradient(135deg, #059669, #047857);
+}
+
+.btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-secondary {
+  background: linear-gradient(135deg, #015916, #02ca7a);
+  box-shadow: 0 4px 15px rgba(1, 106, 46, 0.3);
+}
+
+.btn-secondary:hover {
+  background: linear-gradient(135deg, #06d99a, #03833b);
+  box-shadow: 0 6px 20px rgba(2, 85, 7, 0.4);
+}
+
+#video {
+  width: 100%;
+  max-width: 400px;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  margin: 20px 0;
+  display: none;
+}
+
+.camera-controls {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+
+.results-section {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(34, 197, 94, 0.1));
+  border-radius: 15px;
+  padding: 30px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  margin-top: 30px;
+  display: none;
+}
+
+.results-section.show {
+  display: block;
+  animation: slideUp 0.5s ease-out;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.prediction-title {
+  font-size: 1.5rem;
+  color: #064e3b;
+  margin-bottom: 15px;
+  font-weight: 600;
+}
+
+.care-instructions {
+  background: white;
+  padding: 25px;
+  border-radius: 15px;
+  margin: 20px 0;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid #10b981;
+}
+
+.care-instructions h3 {
+  color: #064e3b;
+  margin-bottom: 15px;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.care-instructions p {
+  color: #4b5563;
+  line-height: 1.7;
+  font-size: 1rem;
+}
+
+#result-image {
+  width: 100%;
+  max-width: 350px;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  margin-top: 20px;
+  border: 3px solid rgba(16, 185, 129, 0.3);
+}
+
+.error-message {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  padding: 20px 25px;
+  border-radius: 15px;
+  margin: 20px 0;
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Fertilizer Shop Locator Styles */
+.fertilizer-page {
+  padding: 100px 20px 40px;
+  min-height: 100vh;
+}
+
+.fertilizer-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  gap: 30px;
+  align-items: flex-start;
+}
+
+.fertilizer-sidebar {
+  flex: 0 0 350px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  padding: 30px;
+  position: sticky;
+  top: 120px;
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+}
+
+.fertilizer-sidebar h3 {
+  color: white;
+  font-size: 1.5rem;
+  margin-bottom: 20px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.location-info {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 15px;
+  padding: 20px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.location-info h4 {
+  color: #a7f3d0;
+  font-size: 1.1rem;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.location-info p {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.shops-list {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.shop-item {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.shop-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.shop-item.selected {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.shop-name {
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shop-address {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9rem;
+  line-height: 1.3;
+  margin-bottom: 8px;
+}
+
+.shop-distance {
+  color: #a7f3d0;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.fertilizer-main {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  padding: 30px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  min-height: 700px;
+}
+
+.fertilizer-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.fertilizer-header h2 {
+  font-size: 2.2rem;
+  color: #064e3b;
+  margin-bottom: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+}
+
+.fertilizer-header p {
+  color: #6b7280;
+  font-size: 1.1rem;
+}
+
+.map-controls {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 25px;
+  flex-wrap: wrap;
+}
+
+.status-message {
+  text-align: center;
+  padding: 20px;
+  border-radius: 15px;
+  margin: 20px 0;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.status-loading {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(37, 99, 235, 0.1));
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #1e40af;
+}
+
+.status-success {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1));
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #047857;
+}
+
+.status-error {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.1));
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #b91c1c;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+#fertilizer-map {
+  width: 100%;
+  height: 500px;
+  border-radius: 20px;
+  border: 2px solid rgba(16, 185, 129, 0.2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.map-legend {
+  background: white;
+  border-radius: 10px;
+  padding: 15px;
+  margin-top: 20px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.map-legend h4 {
+  color: #064e3b;
+  margin-bottom: 10px;
+  font-size: 1rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 5px;
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
+.legend-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+
+.user-location { background: #3b82f6; }
+.shop-location { background: #10b981; }
+
+/* About and Contact Pages */
+.content-page {
+  padding: 100px 20px 40px;
+  min-height: 100vh;
+}
+
+.content-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  border-radius: 25px;
+  padding: 50px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+  color: white;
+}
+
+.content-container h2 {
+  font-size: 2.8rem;
+  font-weight: 700;
+  margin-bottom: 30px;
+  text-align: center;
+  background: linear-gradient(135deg, #ffffff, #a7f3d0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.content-container h3 {
+  font-size: 1.8rem;
+  font-weight: 600;
+  margin: 30px 0 15px 0;
+  color: #a7f3d0;
+}
+
+.content-container p {
+  font-size: 1.1rem;
+  line-height: 1.8;
+  margin-bottom: 20px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 25px;
+  margin: 30px 0;
+}
+
+.feature-card {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 25px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+  transition: transform 0.3s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-5px);
+}
+
+.feature-icon {
+  font-size: 3rem;
+  margin-bottom: 15px;
+  display: block;
+}
+
+.contact-form {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(15px);
+  border-radius: 20px;
+  padding: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 30px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #a7f3d0;
+}
+
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  padding: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 1rem;
+  backdrop-filter: blur(10px);
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #10b981;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+}
+
+/* Loading animation */
+.processing {
+  position: relative;
+  overflow: hidden;
+}
+
+.processing::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.4), transparent);
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  to { left: 100%; }
+}
+
+/* Mobile Responsive */
+@media (max-width: 1200px) {
+  .fertilizer-container {
+    flex-direction: column;
+  }
+  
+  .fertilizer-sidebar {
+    flex: none;
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 1024px) {
+  .hero-container {
+    flex-direction: column;
+    text-align: center;
+    gap: 40px;
+  }
+  
+  .detection-container {
+    flex-direction: column;
+  }
+  
+  .detection-sidebar {
+    flex: none;
+    position: static;
+  }
+  
+  .nav-links {
+    display: none;
+  }
+  
+  .shops-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 15px;
+    max-height: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .nav-container {
+    padding: 0 20px;
+  }
+  
+  .hero-content h1 {
+    font-size: 2.5rem;
+  }
+  
+  .hero-content .subtitle {
+    font-size: 1.1rem;
+  }
+  
+  .plant-icon {
+    width: 200px;
+    height: 200px;
+    font-size: 80px;
+  }
+  
+  .detection-main, .fertilizer-main {
+    padding: 25px;
+  }
+  
+  .camera-controls, .map-controls {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .fertilizer-header h2 {
+    font-size: 1.8rem;
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  #fertilizer-map {
+    height: 400px;
+  }
+  
+  .content-container {
+    padding: 30px 25px;
+  }
+}
+
+@media (max-width: 480px) {
+  .fertilizer-sidebar {
+    padding: 20px;
+  }
+  
+  .shop-item {
+    padding: 15px;
+  }
+  
+  #fertilizer-map {
+    height: 350px;
+  }
+}
+</style>
+</head>
+<body>
+  <div class="background"></div>
+  
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <div class="logo" onclick="showPage('home')">🌿 PlantCare AI</div>
+      <ul class="nav-links">
+        <li><a href="javascript:void(0)" onclick="showPage('home')" class="active">Home</a></li>
+        <li><a href="javascript:void(0)" onclick="showPage('detection')">Detection</a></li>
+        <li><a href="javascript:void(0)" onclick="showPage('fertilizer')">Fertilizer Shops</a></li>
+        <li><a href="javascript:void(0)" onclick="showPage('about')">About</a></li>
+        <li><a href="javascript:void(0)" onclick="showPage('contact')">Contact</a></li>
+      </ul>
+    </div>
+  </nav>
+  
+  <!-- Home Page -->
+  <div id="home" class="page active">
+    <div class="home-page">
+      <div class="hero-container">
+        <div class="hero-content">
+          <h1>Find the solution for your plant care</h1>
+          <p class="subtitle">Advanced AI-powered plant disease detection system that helps you identify plant health issues early and provides personalized care recommendations for healthier, thriving plants.</p>
+          <button class="cta-button" onclick="showPage('detection')">
+            Start Detection →
+          </button>
+        </div>
+        <div class="hero-visual">
+          <div class="plant-icon">🍀</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detection Page -->
+  <div id="detection" class="page">
+    <div class="detection-page">
+      <div class="detection-container">
+        <div class="detection-sidebar">
+          <h3>🔍 How it works</h3>
+          <p>Our AI analyzes your plant images to detect diseases, nutrient deficiencies, and pest problems. Simply upload a clear photo of your plant's leaves or take a live photo for instant analysis and care recommendations.</p>
+          
+          <div style="margin-top: 25px;">
+            <h3>📸 Best Results Tips</h3>
+            <p>• Use natural lighting<br>• Focus on affected areas<br>• Ensure leaves are clearly visible<br>• Avoid blurry images</p>
+          </div>
+        </div>
+
+        <div class="detection-main">
+          <div class="detection-header">
+            <h2>Plant Disease Detection</h2>
+            <p>Upload an image or take a photo to analyze your plant's health</p>
+          </div>
+
+          <div class="upload-section">
+            <div class="section-title">
+              <span class="icon">📁</span>
+              Upload Plant Image
+            </div>
+            <form method="post" action="{% url 'predict_disease' %}"enctype="multipart/form-data" style="text-align: center;">
+              {% csrf_token %}
+              <input type="file" name="leaf_image" accept="image/*" id="file-input" />
+              <input type="hidden" name="action" value="upload" />
+              <label for="file-input" class="file-upload-btn">Choose File</label>
+              <button type="submit" class="btn" style="margin-left: 15px;">Analyze Image</button>
+            </form>
+          </div>
+
+          <div class="camera-section">
+            <div class="section-title">
+              <span class="icon">📸</span>
+              Take Live Photo
+            </div>
+            <div style="text-align: center;">
+              <button id="open-camera" class="btn btn-secondary">Open Camera</button>
+              <video id="video" width="400" height="300" autoplay></video>
+
+              <form id="webcam-form" method="post" action="{% url 'predict_disease' %}">
+                {% csrf_token %}
+                <input type="hidden" name="captured_image" id="captured_image" />
+                <input type="hidden" name="action" value="webcam" />
+                
+                <div class="camera-controls">
+                  <button type="button" id="take-photo" class="btn" disabled>Capture Photo</button>
+                  <button type="submit" id="send-photo" class="btn" disabled>Analyze Photo</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div id="demo-results" class="results-section">
+            <h2 class="prediction-title">Detection Result: Healthy Plant</h2>
+            
+            <div class="care-instructions">
+              <h3>🌿 Care Instructions:</h3>
+              <p>Your plant appears healthy! Continue with regular watering, ensure adequate sunlight, and monitor for any changes. Regular fertilization every 2-3 months will help maintain optimal growth.</p>
+            </div>
+            
+            <div style="text-align: center;">
+              <img id="result-image" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'><rect width='300' height='200' fill='%23f0fdf4'/><text x='150' y='100' text-anchor='middle' font-size='60' fill='%2316a34a'>🌿</text><text x='150' y='140' text-anchor='middle' font-size='16' fill='%23166534'>Sample Plant Image</text></svg>" alt="Sample Plant Analysis" />
+            </div>
+          </div>
+
+          <div id="demo-error" class="error-message" style="display: none;">
+            <span>⚠️</span>
+            <span>Please upload a clear image of plant leaves for accurate analysis.</span>
+          </div>
+
+          <canvas id="canvas" style="display: none;"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fertilizer Shops Page -->
+  <div id="fertilizer" class="page">
+    <div class="fertilizer-page">
+      <div class="fertilizer-container">
+        <!-- Sidebar with location info and shops list -->
+        <div class="fertilizer-sidebar">
+          <h3>
+            <span>🗺️</span>
+            Location & Shops
+          </h3>
+          
+          <div class="location-info">
+            <h4>
+              <span>📍</span>
+              Your Location
+            </h4>
+            <p id="location-display">Click "Find My Location" to get started</p>
+          </div>
+          
+          <div id="shops-count" style="color: #a7f3d0; font-size: 0.9rem; margin-bottom: 20px; text-align: center;">
+            <!-- Shop count will appear here -->
+          </div>
+          
+          <div class="shops-list" id="shops-list">
+            <!-- Shop items will be populated here -->
+          </div>
+        </div>
+
+        <!-- Main Map Area -->
+        <div class="fertilizer-main">
+          <div class="fertilizer-header">
+            <h2>
+              <span>🌾</span>
+              Fertilizer Shop Locator
+            </h2>
+            <p>Find the nearest fertilizer shops and agricultural supplies in your area</p>
+          </div>
+
+          <div class="map-controls">
+            <button id="locate-btn" class="btn">
+              <span id="locate-btn-text">📍 Find My Location</span>
+            </button>
+            <button id="refresh-btn" class="btn btn-secondary" disabled>
+              🔄 Refresh Shops
+            </button>
+          </div>
+
+          <div id="status-message" class="status-message status-loading" style="display: none;">
+            <span id="status-icon">⏳</span>
+            <span id="status-text">Getting your location...</span>
+          </div>
+
+          <div id="fertilizer-map"></div>
+
+          <div class="map-legend">
+            <h4>Map Legend</h4>
+            <div class="legend-item">
+              <div class="legend-icon user-location"></div>
+              <span>Your current location</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-icon shop-location"></div>
+              <span>Fertilizer shops</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- About Page -->
+  <div id="about" class="page">
+    <div class="content-page">
+      <div class="content-container">
+        <h2>About PlantCare AI</h2>
+        
+        <p>PlantCare AI is a revolutionary plant health monitoring system that combines artificial intelligence with botanical expertise to help plant enthusiasts, farmers, and gardeners maintain healthier plants. Our mission is to make plant care accessible, accurate, and effortless for everyone.</p>
+
+        <h3>🌟 Our Mission</h3>
+        <p>We believe that healthy plants contribute to a healthier planet. By democratizing access to plant disease detection and care recommendations, we're empowering people to grow better, more sustainable gardens and crops. Our AI-powered system helps prevent plant diseases before they become serious problems, reducing the need for harmful pesticides and improving crop yields.</p>
+
+        <h3>🔬 Our Technology</h3>
+        <p>Our advanced machine learning models have been trained on thousands of plant images, learning to identify diseases, pest damage, nutrient deficiencies, and other health issues across hundreds of plant species. The system continuously learns and improves, providing increasingly accurate diagnoses and recommendations.</p>
+
+        <div class="feature-grid">
+          <div class="feature-card">
+            <span class="feature-icon">🤖</span>
+            <h4>AI-Powered Detection</h4>
+            <p>Advanced computer vision algorithms analyze plant images with medical-grade precision</p>
+          </div>
+          
+          <div class="feature-card">
+            <span class="feature-icon">📱</span>
+            <h4>Easy to Use</h4>
+            <p>Simple interface that works on any device - just point, click, and analyze</p>
+          </div>
+          <div class="feature-card">
+            <span class="feature-icon">⚡</span>
+            <h4>Instant Results</h4>
+            <p>Get diagnosis and care recommendations in seconds, not days</p>
+          </div>
+        </div>
+
+        <h3>🌱 Our Impact</h3>
+        <p>Since our launch, PlantCare AI has helped users identify and treat plant health issues, resulting in healthier gardens, increased crop yields, and reduced plant mortality. We're proud to contribute to sustainable agriculture and environmental conservation.</p>
+
+        <p><em>Join us in our mission to create a greener, healthier world - one plant at a time.</em></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contact Page -->
+  <div id="contact" class="page">
+    <div class="content-page">
+      <div class="content-container">
+        <h2>Contact Us</h2>
+        <p>Got questions, feedback, or just want to say hi? We'd love to hear from you! Drop us a message below and our team will get back to you ASAP.</p>
+
+        <form class="contact-form" action="#" method="POST">
+          <div class="form-group">
+            <label for="name">Your Name</label>
+            <input type="text" id="name" name="name" placeholder="Enter your full name" required />
+          </div>
+
+          <div class="form-group">
+            <label for="email">Email Address</label>
+            <input type="email" id="email" name="email" placeholder="Enter your email" required />
+          </div>
+
+          <div class="form-group">
+            <label for="subject">Subject</label>
+            <input type="text" id="subject" name="subject" placeholder="What's this about?" />
+          </div>
+
+          <div class="form-group">
+            <label for="message">Message</label>
+            <textarea id="message" name="message" rows="5" placeholder="Write your message here..." required></textarea>
+          </div>
+
+          <button type="submit" class="btn">Send Message</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <script>
+  const openCameraBtn = document.getElementById('open-camera');
+  const video = document.getElementById('video');
+  const takePhotoBtn = document.getElementById('take-photo');
+  const sendPhotoBtn = document.getElementById('send-photo');
+  const capturedImageInput = document.getElementById('captured_image');
+  const canvas = document.getElementById('canvas');
+  const webcamForm = document.getElementById('webcam-form');
+  const fileInput = document.getElementById('file-input');
+  const resultSection = document.getElementById('demo-results');
+  const errorSection = document.getElementById('demo-error');
+  let stream ;
+  function showPage(pageId) {
+  // Hide all pages
+  const pages = document.querySelectorAll('.page');
+  pages.forEach(page => {
+    page.style.display = 'none';
+  });
+
+  // Remove "active" class from all nav links
+  const navLinks = document.querySelectorAll('.nav-links a');
+  navLinks.forEach(link => link.classList.remove('active'));
+
+  // Show the selected page
+  const activePage = document.getElementById(pageId);
+  if (activePage) {
+    activePage.style.display = 'block';
+  }
+
+  // Add "active" to the clicked nav link
+  const activeNavLink = document.querySelector(`.nav-links a[onclick="showPage('${pageId}')"]`);
+  if (activeNavLink) {
+    activeNavLink.classList.add('active');
+  }
+}
+
+  // Get CSRF token from cookie
+  function getCSRFToken() {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, 10) === 'csrftoken=') {
+          cookieValue = decodeURIComponent(cookie.substring(10));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+
+  // Show error
+  function showDemoError() {
+    if (errorSection) {
+      errorSection.style.display = 'flex';
+      setTimeout(() => { errorSection.style.display = 'none'; }, 5000);
+    }
+  }
+
+  // Handle file upload
+  if (fileInput) {
+    fileInput.addEventListener('change', function () {
+      if (this.files && this.files[0]) {
+        const fileName = this.files[0].name;
+        const label = document.querySelector('label[for="file-input"]');
+        label.textContent = fileName.length > 20 ? fileName.substring(0, 20) + '...' : fileName;
+        label.style.background = 'linear-gradient(135deg, #059669, #047857)';
+        sendImageToBackend(this.files[0]);
+      }
+    });
+  }
+// Open Camera
+openCameraBtn.addEventListener('click', async () => {
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      video.srcObject = stream;
+      video.style.display = 'block';
+      takePhotoBtn.disabled = false;
+      sendPhotoBtn.disabled = true;
+    } catch (err) {
+      alert("Could not access webcam: " + err);
+    }
+  } else {
+    alert("Your browser does not support webcam access.");
+  }
+});
+
+// Capture Photo
+takePhotoBtn.addEventListener('click', () => {
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  capturedImageInput.value = canvas.toDataURL('image/jpeg');
+  sendPhotoBtn.disabled = false;
+});
+
+// Stop webcam on form submit
+webcamForm.addEventListener('submit', () => {
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+  }
+});
+
+  // Send image to backend and handle prediction
+  function sendImageToBackend(fileOrBlob) {
+    const formData = new FormData();
+    formData.append('leaf_image', fileOrBlob);
+
+    fetch('/predict_disease/', {
+      method: 'POST',
+      body: formData,
+      headers: { 'X-CSRFToken': getCSRFToken() }
+    })
+    .then(response => response.json())
+    .then(data => {
+      displayPrediction(data);
+      fetchShopLinks(data.predicted_class);
+    })
+    .catch(() => showDemoError());
+  }
+
+  // Display prediction
+  function displayPrediction(data) {
+    resultSection.querySelector('.prediction-title').textContent =
+      `Detection Result: ${data.predicted_class}`;
+    resultSection.querySelector('.care-instructions p').textContent = data.care_instructions;
+    if (data.image_url) {
+      document.getElementById('result-image').src = data.image_url;
+    }
+    resultSection.classList.add('show');
+  }
+  document.addEventListener("DOMContentLoaded", () => {
+  const findLocationBtn = document.getElementById("find-location");
+
+  if (findLocationBtn) {
+    findLocationBtn.addEventListener("click", () => {
+      if (navigator.geolocation) {
+        findLocationBtn.textContent = "Locating...";
+        navigator.geolocation.getCurrentPosition(
+          position => {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            console.log("Your location:", lat, lon);
+
+            // Example: Pass location to your shop-finding function
+            getNearbyShops(lat, lon);
+
+            findLocationBtn.textContent = "Find My Location ✅";
+          },
+          error => {
+            console.error("Error getting location:", error);
+            alert("Unable to retrieve location.");
+            findLocationBtn.textContent = "Find My Location";
+          }
+        );
+      } else {
+        alert("Geolocation is not supported by your browser.");
+      }
+    });
+  }
+});
+
+function getNearbyShops(lat, lon) {
+  // Replace with your backend call or map API
+  console.log(`Fetching shops near ${lat}, ${lon}...`);
+}
+
+
+  // Fetch nearby shop links for treatment
+  function fetchShopLinks(diseaseName) {
+    fetch(`/get_shop_links/?disease=${encodeURIComponent(diseaseName)}`)
+      .then(response => response.json())
+      .then(data => {
+        let shopList = '<h3>🛒 Nearby Shops:</h3><ul>';
+        data.shops.forEach(shop => {
+          shopList += `<li><a href="${shop.url}" target="_blank">${shop.name}</a></li>`;
+        });
+        shopList += '</ul>';
+        resultSection.insertAdjacentHTML('beforeend', shopList);
+      })
+      .catch(() => console.error('Error fetching shop links'));
+  }
+
+  // Smooth animations
+  document.addEventListener('DOMContentLoaded', function () {
+    const observerOptions = { threshold: 0.1, rootMargin: '0px 0px -50px 0px' };
+    const observer = new IntersectionObserver(function (entries) {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.opacity = '1';
+          entry.target.style.transform = 'translateY(0)';
+        }
+      });
+    }, observerOptions);
+
+    document.querySelectorAll('.upload-section, .camera-section, .detection-sidebar, .fertilizer-sidebar').forEach(el => {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(30px)';
+      el.style.transition = 'all 0.8s ease-out';
+      observer.observe(el);
+    });
+  });
+</script>
+
+   
+</body>
+</html>
